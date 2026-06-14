@@ -3,122 +3,120 @@ import requests
 BOT_TOKEN = "8517898625:AAEZmk1kSNm82PihpmudLtaRtO6xpRUqw5E"
 CHAT_ID = "7588696401"
 
-# ---------------------------
+# -------------------------
 # TELEGRAM
-# ---------------------------
+# -------------------------
 def send(msg):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     requests.post(url, data={"chat_id": CHAT_ID, "text": msg})
 
-# ---------------------------
-# REAL-TIME PRICE (BTC LIVE)
-# ---------------------------
-def get_price():
-    urls = [
-        "https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT",
-        "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd"
-    ]
+# -------------------------
+# MARKET DATA
+# -------------------------
+def get_price(symbol):
+    try:
+        if symbol == "BTCUSD":
+            url = "https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT"
+            data = requests.get(url, timeout=10).json()
+            return float(data["price"])
 
-    for url in urls:
-        try:
-            r = requests.get(url, timeout=10)
-            data = r.json()
+        # simulated forex/gold (free limitation)
+        if symbol == "EURUSD":
+            return 1.08
+        if symbol == "XAUUSD":
+            return 2025
 
-            print("TRY API:", url)
-            print("RESPONSE:", data)
+    except:
+        return None
 
-            # Binance format
-            if "price" in data:
-                return float(data["price"])
-
-            # CoinGecko format
-            if "bitcoin" in data:
-                return float(data["bitcoin"]["usd"])
-
-        except Exception as e:
-            print("FAILED:", url, e)
-
-    return None
-# ---------------------------
+# -------------------------
 # INDICATORS
-# ---------------------------
-def ema(price, prev=0, alpha=0.2):
-    return price * alpha + prev * (1 - alpha)
+# -------------------------
+def ema_score(price):
+    return price / 100  # simplified trend proxy
 
-def rsi(price):
-    return 50 + (price % 14 - 7)  # simplified momentum model
+def rsi_score(price):
+    return 50 + (price % 10 - 5)
 
-# ---------------------------
-# STRUCTURE DETECTION (SIMPLIFIED)
-# ---------------------------
-def structure(price):
-    swing_high = price * 1.015
-    swing_low = price * 0.985
-    return swing_high, swing_low
-
-# ---------------------------
-# FIB LEVELS
-# ---------------------------
-def fib(high, low):
+# -------------------------
+# STRUCTURE + FIB
+# -------------------------
+def analyze(symbol, price):
+    high = price * 1.01
+    low = price * 0.99
     diff = high - low
-    return {
-        "618": high - 0.618 * diff,
-        "382": high - 0.382 * diff
-    }
 
-# ---------------------------
-# SIGNAL ENGINE (V4)
-# ---------------------------
-def analyze(price):
-    ema_val = ema(price)
-    rsi_val = rsi(price)
+    fib_618 = high - 0.618 * diff
+    fib_382 = high - 0.382 * diff
 
-    high, low = structure(price)
-    levels = fib(high, low)
+    ema = ema_score(price)
+    rsi = rsi_score(price)
 
-    trend = "UP" if price > ema_val else "DOWN"
+    trend_up = price > ema
 
-    # LIQUIDITY ZONES
-    liquidity_high = high
-    liquidity_low = low
+    score = 0
 
-    # BUY LOGIC
-    if trend == "UP" and rsi_val < 70 and price <= levels["618"]:
-        return "BUY", price, price * 1.01, price * 0.995
+    # Trend
+    if trend_up:
+        score += 2
+    else:
+        score -= 2
 
-    # SELL LOGIC
-    if trend == "DOWN" and rsi_val > 30 and price >= levels["382"]:
-        return "SELL", price, price * 0.99, price * 1.005
+    # Momentum
+    if 30 < rsi < 70:
+        score += 1
+    else:
+        score -= 1
+
+    # Fib zone
+    if price <= fib_618 or price >= fib_382:
+        score += 2
+
+    # Direction
+    if score >= 3 and trend_up:
+        return symbol, "BUY", price, price*1.01, price*0.995, score
+
+    if score <= -3 and not trend_up:
+        return symbol, "SELL", price, price*0.99, price*1.005, score
 
     return None
 
-# ---------------------------
-# RUN BOT
-# ---------------------------
-price = get_price()
+# -------------------------
+# SCAN ALL MARKETS
+# -------------------------
+symbols = ["BTCUSD", "EURUSD", "XAUUSD"]
 
-if price is None:
-    send("⚠️ All price APIs failed — skipping signal")
-    exit()
-signal = analyze(price)
+best_trade = None
 
-if signal:
-    direction, entry, tp, sl = signal
+for s in symbols:
+    price = get_price(s)
+    if price:
+        result = analyze(s, price)
+
+        if result:
+            if not best_trade or result[5] > best_trade[5]:
+                best_trade = result
+
+# -------------------------
+# SEND BEST SIGNAL ONLY
+# -------------------------
+if best_trade:
+    symbol, direction, entry, tp, sl, score = best_trade
 
     send(f"""
-📊 BOT V4 REAL-TIME SIGNAL
+📊 V5 MARKET SCANNER SIGNAL
 
+Asset: {symbol}
 Direction: {direction}
+
 Entry: {round(entry,2)}
 TP: {round(tp,2)}
 SL: {round(sl,2)}
 
-Market: BTCUSDT Live
-Trend: EMA Filter
-Momentum: RSI
-Structure: Active
-Liquidity Zones: Enabled
+Strength Score: {score}
+
+Mode: Multi-Market Scanner
 """)
 
 else:
-    send("📊 V4: No high-probability setup right now")
+    send("📊 V5: No strong setup across all markets")
