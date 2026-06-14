@@ -1,6 +1,6 @@
 import requests
 
-BOT_TOKEN = "YOUR_TOKEN_HERE"
+BOT_TOKEN = "8517898625:AAEZmk1kSNm82PihpmudLtaRtO6xpRUqw5E"
 CHAT_ID = "7588696401"
 
 def send(msg):
