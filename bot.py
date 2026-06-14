@@ -3,120 +3,106 @@ import requests
 BOT_TOKEN = "8517898625:AAEZmk1kSNm82PihpmudLtaRtO6xpRUqw5E"
 CHAT_ID = "7588696401"
 
-# -------------------------
-# TELEGRAM
-# -------------------------
 def send(msg):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    requests.post(url, data={"chat_id": CHAT_ID, "text": msg})
 
-# -------------------------
-# MARKET DATA
-# -------------------------
-def get_price(symbol):
+    requests.post(
+        url,
+        data={
+            "chat_id": CHAT_ID,
+            "text": msg
+        }
+    )
+
+def get_btc_price():
     try:
-        if symbol == "BTCUSD":
-            url = "https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT"
-            data = requests.get(url, timeout=10).json()
+        url = "https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT"
+
+        data = requests.get(url, timeout=10).json()
+
+        if "price" in data:
             return float(data["price"])
 
-        # simulated forex/gold (free limitation)
-        if symbol == "EURUSD":
-            return 1.08
-        if symbol == "XAUUSD":
-            return 2025
+        return None
 
     except:
         return None
 
-# -------------------------
-# INDICATORS
-# -------------------------
-def ema_score(price):
-    return price / 100  # simplified trend proxy
 
-def rsi_score(price):
-    return 50 + (price % 10 - 5)
+def structure_analysis(price):
+    swing_high = price * 1.01
+    swing_low = price * 0.99
 
-# -------------------------
-# STRUCTURE + FIB
-# -------------------------
-def analyze(symbol, price):
-    high = price * 1.01
-    low = price * 0.99
-    diff = high - low
+    range_size = swing_high - swing_low
 
-    fib_618 = high - 0.618 * diff
-    fib_382 = high - 0.382 * diff
+    fib_618 = swing_high - (0.618 * range_size)
+    fib_382 = swing_high - (0.382 * range_size)
 
-    ema = ema_score(price)
-    rsi = rsi_score(price)
+    return {
+        "high": swing_high,
+        "low": swing_low,
+        "fib618": fib_618,
+        "fib382": fib_382
+    }
 
-    trend_up = price > ema
 
-    score = 0
+def analyze(price):
 
-    # Trend
-    if trend_up:
-        score += 2
-    else:
-        score -= 2
+    s = structure_analysis(price)
 
-    # Momentum
-    if 30 < rsi < 70:
-        score += 1
-    else:
-        score -= 1
+    # Simple trend approximation
+    trend_up = price > ((s["high"] + s["low"]) / 2)
 
-    # Fib zone
-    if price <= fib_618 or price >= fib_382:
-        score += 2
+    # Simple liquidity zones
+    liquidity_high = s["high"]
+    liquidity_low = s["low"]
 
-    # Direction
-    if score >= 3 and trend_up:
-        return symbol, "BUY", price, price*1.01, price*0.995, score
+    if trend_up and price <= s["fib618"]:
 
-    if score <= -3 and not trend_up:
-        return symbol, "SELL", price, price*0.99, price*1.005, score
+        return {
+            "direction": "BUY",
+            "entry": price,
+            "tp": liquidity_high,
+            "sl": liquidity_low
+        }
+
+    if (not trend_up) and price >= s["fib382"]:
+
+        return {
+            "direction": "SELL",
+            "entry": price,
+            "tp": liquidity_low,
+            "sl": liquidity_high
+        }
 
     return None
 
-# -------------------------
-# SCAN ALL MARKETS
-# -------------------------
-symbols = ["BTCUSD", "EURUSD", "XAUUSD"]
 
-best_trade = None
+price = get_btc_price()
 
-for s in symbols:
-    price = get_price(s)
-    if price:
-        result = analyze(s, price)
+if price is None:
+    send("⚠️ Could not get BTC market data")
+    raise SystemExit()
 
-        if result:
-            if not best_trade or result[5] > best_trade[5]:
-                best_trade = result
+signal = analyze(price)
 
-# -------------------------
-# SEND BEST SIGNAL ONLY
-# -------------------------
-if best_trade:
-    symbol, direction, entry, tp, sl, score = best_trade
+if signal:
 
-    send(f"""
-📊 V5 MARKET SCANNER SIGNAL
+    send(
+f"""📊 V6 SCANNER
 
-Asset: {symbol}
-Direction: {direction}
+Asset: BTCUSD
 
-Entry: {round(entry,2)}
-TP: {round(tp,2)}
-SL: {round(sl,2)}
+Direction: {signal['direction']}
 
-Strength Score: {score}
+Entry: {round(signal['entry'],2)}
+TP: {round(signal['tp'],2)}
+SL: {round(signal['sl'],2)}
 
-Mode: Multi-Market Scanner
-""")
+Structure: Enabled
+Liquidity Zones: Enabled
+"""
+    )
 
 else:
-    send("📊 V5: No strong setup across all markets")
+    send("📊 V6: No setup found")
