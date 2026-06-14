@@ -16,7 +16,7 @@ def send(msg):
 
 def get_btc_price():
     try:
-        url = "https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT"
+        url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd"
 
         response = requests.get(url, timeout=10)
 
@@ -25,15 +25,11 @@ def get_btc_price():
 
         data = response.json()
 
-        if "price" in data:
-            return float(data["price"])
-
-        return None
+        return float(data["bitcoin"]["usd"])
 
     except Exception as e:
         print("ERROR:", e)
         return None
-
 
 def structure_analysis(price):
     swing_high = price * 1.01
@@ -86,10 +82,10 @@ def analyze(price):
 
 price = get_btc_price()
 
-if price is None:
-    send("⚠️ Could not get BTC market data")
-    raise SystemExit()
-
+if price:
+    send(f"✅ BTC Price: ${price}")
+else:
+    send("❌ Failed to get BTC price")
 signal = analyze(price)
 
 if signal:
