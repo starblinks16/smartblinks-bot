@@ -13,17 +13,15 @@ def get_price():
         r = requests.get(url, timeout=10)
         data = r.json()
 
-        print("API RESPONSE:", data)
+        print("RAW API RESPONSE:", data)
 
-        price = data.get("price")
+        if "price" in data:
+            return float(data["price"])
 
-        if price is None:
-            return None
-
-        return float(price)
+        return None
 
     except Exception as e:
-        print("ERROR:", e)
+        print("PRICE ERROR:", e)
         return None
 
 def fibonacci(price):
@@ -46,9 +44,10 @@ send("🤖 Bot Started Successfully")
 
 price = get_price()
 
+# fallback so bot NEVER breaks
 if price is None:
-    send("⚠️ API ERROR: Could not fetch BTC price")
-else:
+    price = 65000  # fallback BTC estimate
+    send("⚠️ Using fallback price (API unstable)")
     signal = fibonacci(price)
 
     if signal:
