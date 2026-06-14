@@ -14,23 +14,31 @@ def send(msg):
 # REAL-TIME PRICE (BTC LIVE)
 # ---------------------------
 def get_price():
-    try:
-        url = "https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT"
-        r = requests.get(url, timeout=10)
+    urls = [
+        "https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT",
+        "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd"
+    ]
 
-        data = r.json()
-        print("API RESPONSE:", data)
+    for url in urls:
+        try:
+            r = requests.get(url, timeout=10)
+            data = r.json()
 
-        # SAFE CHECK (prevents KeyError)
-        if "price" not in data:
-            print("NO PRICE KEY FOUND")
-            return None
+            print("TRY API:", url)
+            print("RESPONSE:", data)
 
-        return float(data["price"])
+            # Binance format
+            if "price" in data:
+                return float(data["price"])
 
-    except Exception as e:
-        print("PRICE FETCH ERROR:", e)
-        return None
+            # CoinGecko format
+            if "bitcoin" in data:
+                return float(data["bitcoin"]["usd"])
+
+        except Exception as e:
+            print("FAILED:", url, e)
+
+    return None
 # ---------------------------
 # INDICATORS
 # ---------------------------
@@ -90,7 +98,7 @@ def analyze(price):
 price = get_price()
 
 if price is None:
-    send("⚠️ Price API failed — skipping signal")
+    send("⚠️ All price APIs failed — skipping signal")
     exit()
 signal = analyze(price)
 
